@@ -27,16 +27,39 @@ function _opah_doctor -d "Diagnose and validate complete setup"
     # ── Authentication ───────────────────────────────────────────────────────
     _opah_section Authentication
     if command -q op
-        set -l accounts (op account list --format=json 2>/dev/null)
-        if test -n "$accounts"; and test "$accounts" != "[]"
-            _opah_success "Signed in to 1Password"
-            set -l emails (echo $accounts | string match -ra '"email":"[^"]*"' | string replace -ra '"email":"([^"]*)"' '$1' | string join ", ")
-            if test -n "$emails"
-                printf "%s     %s%s\n" $__OPAH_COLOR_DIM "$emails" $__OPAH_COLOR_RESET
+        set -l signed_in_json (op account list --format=json 2>/dev/null)
+
+        # Collect account-qualified refs from config (if config exists)
+        set -l required_accounts
+        set -l config_file_for_auth (_opah_find_config)
+        if test -n "$config_file_for_auth"
+            set -l all_refs (_opah_parse_yaml "$config_file_for_auth" | while read -l key ref; echo $ref; end)
+            set required_accounts (_opah_extract_accounts $all_refs)
+        end
+
+        if test (count $required_accounts) -gt 0
+            # Per-account rows
+            for account in $required_accounts
+                if string match -qr '"(url|shorthand)":"'$account'"' -- "$signed_in_json"
+                    _opah_success "Signed in" "($account)"
+                else
+                    _opah_error "Not signed in to account '$account'"
+                    _opah_hint "run: op signin --account $account"
+                    set issues (math $issues + 1)
+                end
             end
         else
-            _opah_warning "Not signed in to 1Password"
-            _opah_hint "run: op signin"
+            # Original single-row check
+            if test -n "$signed_in_json"; and test "$signed_in_json" != "[]"
+                _opah_success "Signed in to 1Password"
+                set -l emails (echo $signed_in_json | string match -ra '"email":"[^"]*"' | string replace -ra '"email":"([^"]*)"' '$1' | string join ", ")
+                if test -n "$emails"
+                    printf "%s     %s%s\n" $__OPAH_COLOR_DIM "$emails" $__OPAH_COLOR_RESET
+                end
+            else
+                _opah_warning "Not signed in to 1Password"
+                _opah_hint "run: op signin"
+            end
         end
     else
         _opah_info "Skipped (op not installed)"

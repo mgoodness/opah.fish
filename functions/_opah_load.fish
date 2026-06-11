@@ -94,6 +94,24 @@ function _opah_load --description "Load secrets from 1Password CLI with data-bas
         return 1
     end
 
+    # Eager per-account check for account-qualified references
+    set -l all_op_refs (_opah_parse_yaml "$config_file" | while read -l key ref; echo $ref; end)
+    set -l required_accounts (_opah_extract_accounts $all_op_refs)
+    if test (count $required_accounts) -gt 0
+        set -l signed_in_json (op account list --format=json 2>/dev/null)
+        set -l auth_failed false
+        for account in $required_accounts
+            if not string match -qr '"(url|shorthand)":"'$account'"' -- "$signed_in_json"
+                _opah_error "Not signed in to account '$account'" >&2
+                _opah_hint "run: op signin --account $account" >&2
+                set auth_failed true
+            end
+        end
+        if test "$auth_failed" = true
+            return 1
+        end
+    end
+
     _opah_info "Loading secrets from 1Password..."
     echo
 
