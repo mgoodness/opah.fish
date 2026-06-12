@@ -107,12 +107,14 @@ function _opah_load --description "Load secrets from 1Password CLI with data-bas
             _opah_cache_read "$cache_file" >/dev/null
         end
 
-        # Find the op:// reference for this key in the config
+        # Find the op:// reference and account for this key in the config
         set -l op_ref ""
+        set -l op_account ""
         _opah_parse_yaml "$config_file" | while read -l line
             set -l parts (string split \t "$line")
             if test "$parts[1]" = "$specific_key"
                 set op_ref $parts[2]
+                set op_account $parts[3]
             end
         end
 
@@ -125,7 +127,12 @@ function _opah_load --description "Load secrets from 1Password CLI with data-bas
         set -l key_dots "$specific_key..."
         printf "  %s%-*s%s" $__OPAH_COLOR_DIM $col_width "$key_dots" $__OPAH_COLOR_RESET
 
-        set -l secret_value (op read "$op_ref" 2>/dev/null)
+        set -l secret_value
+        if test -n "$op_account"
+            set secret_value (op read --account "$op_account" "$op_ref" 2>/dev/null)
+        else
+            set secret_value (op read "$op_ref" 2>/dev/null)
+        end
         if test $status -eq 0; and test -n "$secret_value"
             # Use _opah_cache_update which copies existing entries as-is (no double-escaping)
             if test -f "$cache_file"
@@ -147,14 +154,16 @@ function _opah_load --description "Load secrets from 1Password CLI with data-bas
     set -l success_count 0
     set -l total_count 0
 
-    # Collect keys and refs in one pass, compute col_width at the same time
+    # Collect keys, refs, and accounts in one pass, compute col_width at the same time
     set -l all_keys
     set -l all_refs
+    set -l all_accounts
     set -l col_width 10
     _opah_parse_yaml "$config_file" | while read -l line
         set -l parts (string split \t "$line")
         set -a all_keys $parts[1]
         set -a all_refs $parts[2]
+        set -a all_accounts $parts[3]
         set -l w (math (string length "$parts[1]") + 5)
         if test $w -gt $col_width
             set col_width $w
@@ -169,13 +178,19 @@ function _opah_load --description "Load secrets from 1Password CLI with data-bas
     for i in (seq 1 (count $all_keys))
         set -l key $all_keys[$i]
         set -l op_ref $all_refs[$i]
+        set -l account $all_accounts[$i]
         set total_count (math $total_count + 1)
 
         set -l key_dots "$key..."
         printf "  %s%-*s%s" $__OPAH_COLOR_DIM $col_width "$key_dots" $__OPAH_COLOR_RESET
 
-        # Fetch secret from 1Password
-        set -l secret_value (op read "$op_ref" 2>/dev/null)
+        # Fetch secret from 1Password, passing --account for account-block entries
+        set -l secret_value
+        if test -n "$account"
+            set secret_value (op read --account "$account" "$op_ref" 2>/dev/null)
+        else
+            set secret_value (op read "$op_ref" 2>/dev/null)
+        end
 
         if test $status -eq 0; and test -n "$secret_value"
             # Store raw value; _opah_cache_write will escape it
