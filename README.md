@@ -61,6 +61,24 @@ secrets:
   GITHUB_TOKEN: "op://Work/GitHub/token"
 ```
 
+To load secrets from **multiple 1Password accounts**, use an `accounts:` block keyed by sign-in address. opah passes each address via `op read --account <sign-in-address>` when fetching those secrets:
+
+```yaml
+# Default account (no --account flag)
+secrets:
+  GITHUB_TOKEN: "op://Personal/GitHub/token"
+
+# Named accounts
+accounts:
+  work.1password.com:
+    API_KEY: "op://Work/API Keys/api_key"
+    DATABASE_URL: "op://Work/Database/connection_string"
+  contractors.1password.com:
+    VENDOR_KEY: "op://Contractors/Vendor/api_key"
+```
+
+Both blocks may coexist in the same file. A full `opah refresh` loads all of them into a single cache.
+
 Values must be [1Password secret references](https://developer.1password.com/docs/cli/secret-reference-syntax/) in `op://vault/item/field` format. opah checks the following locations in order, using the first file it finds:
 
 - `~/.config/fish/secrets.yaml` _(recommended)_

@@ -27,16 +27,45 @@ function _opah_doctor -d "Diagnose and validate complete setup"
     # ── Authentication ───────────────────────────────────────────────────────
     _opah_section Authentication
     if command -q op
-        set -l accounts (op account list --format=json 2>/dev/null)
-        if test -n "$accounts"; and test "$accounts" != "[]"
-            _opah_success "Signed in to 1Password"
-            set -l emails (echo $accounts | string match -ra '"email":"[^"]*"' | string replace -ra '"email":"([^"]*)"' '$1' | string join ", ")
-            if test -n "$emails"
-                printf "%s     %s%s\n" $__OPAH_COLOR_DIM "$emails" $__OPAH_COLOR_RESET
+        set -l account_list_json (op account list --format=json 2>/dev/null)
+        set -l signed_in (test -n "$account_list_json"; and test "$account_list_json" != "[]")
+
+        # Collect unique sign-in addresses from accounts: blocks
+        set -l required_accounts
+        set -l auth_config_file (_opah_find_config 2>/dev/null)
+        if test -n "$auth_config_file"
+            _opah_parse_yaml "$auth_config_file" | while read -l line
+                set -l parts (string split \t "$line")
+                set -l acct $parts[3]
+                if test -n "$acct"; and not contains -- "$acct" $required_accounts
+                    set -a required_accounts $acct
+                end
+            end
+        end
+
+        if test (count $required_accounts) -gt 0
+            # Per-account rows
+            for acct in $required_accounts
+                if string match -qr "\"url\":[[:space:]]*\"$acct\"" "$account_list_json"
+                    _opah_success "Signed in  ($acct)"
+                else
+                    _opah_error "Not signed in  ($acct)"
+                    _opah_hint "run: op signin --account $acct"
+                    set issues (math $issues + 1)
+                end
             end
         else
-            _opah_warning "Not signed in to 1Password"
-            _opah_hint "run: op signin"
+            # Fallback: single generic row for secrets-only configs
+            if test -n "$account_list_json"; and test "$account_list_json" != "[]"
+                _opah_success "Signed in to 1Password"
+                set -l emails (echo $account_list_json | string match -ra '"email":"[^"]*"' | string replace -ra '"email":"([^"]*)"' '$1' | string join ", ")
+                if test -n "$emails"
+                    printf "%s     %s%s\n" $__OPAH_COLOR_DIM "$emails" $__OPAH_COLOR_RESET
+                end
+            else
+                _opah_warning "Not signed in to 1Password"
+                _opah_hint "run: op signin"
+            end
         end
     else
         _opah_info "Skipped (op not installed)"
@@ -50,7 +79,7 @@ function _opah_doctor -d "Diagnose and validate complete setup"
         set -l secret_count (string match -ra "op://" <"$config_file" | count)
         _opah_info "$secret_count secrets defined"
         # Check for non-1Password values
-        set -l non_op (grep -v "op://" "$config_file" | grep -v "secrets:" | grep -v '^#' | grep -v '^$' | grep ":" | count 2>/dev/null)
+        set -l non_op (grep -v "op://" "$config_file" | grep -v "secrets:" | grep -v "accounts:" | grep -v '^#' | grep -v '^$' | grep -v ':[[:space:]]*$' | grep ":" | count 2>/dev/null)
         if test "$non_op" -gt 0
             _opah_warning "$non_op value(s) are not 1Password references"
             set issues (math $issues + 1)

@@ -232,5 +232,258 @@ printf 'OPAH_CACHED_KEY\tcached_value\n' | _opah_cache_write "$cache_file" >/dev
         echo $OPAH_LOAD_KEY1
     end) = fresh_value
 
+# ── Load: accounts block --account flag ──────────────────────────────────────
+
+set accounts_config_file "$tmp/accounts.yaml"
+printf "accounts:\n  work.1password.com:\n    WORK_KEY: op://Work/Item/field\n" >"$accounts_config_file"
+
+set mixed_config_file "$tmp/mixed.yaml"
+printf "secrets:\n  PLAIN_KEY: op://Vault/Item/plain\naccounts:\n  work.1password.com:\n    WORK_KEY: op://Work/Item/field\n" >"$mixed_config_file"
+
+@test "load: fetches secrets-block secret without --account flag" \
+    (begin
+        function _opah_get_config_paths; echo "$config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read
+                    if contains -- --account $argv
+                        set -l idx (contains -i -- --account $argv)
+                        set -l acct $argv[(math $idx + 1)]
+                        echo "via:$acct:$argv[-1]"
+                    else
+                        echo "plain:$argv[-1]"
+                    end
+                    return 0
+                case account
+                    printf '[{}]\n'; return 0
+            end
+            return 1
+        end
+        _opah_load --force >/dev/null 2>&1
+        echo $OPAH_LOAD_KEY1
+    end) = "plain:op://Vault/Item/field1"
+
+@test "load: full refresh loads secrets from both secrets and accounts blocks" \
+    (begin
+        function _opah_get_config_paths; echo "$mixed_config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read
+                    if contains -- --account $argv
+                        set -l idx (contains -i -- --account $argv)
+                        set -l acct $argv[(math $idx + 1)]
+                        echo "via:$acct:$argv[-1]"
+                    else
+                        echo "plain:$argv[-1]"
+                    end
+                    return 0
+                case account
+                    printf '[{"url":"work.1password.com"}]\n'; return 0
+            end
+            return 1
+        end
+        set -e PLAIN_KEY; set -e WORK_KEY
+        _opah_load --force >/dev/null 2>&1
+        echo "$PLAIN_KEY/$WORK_KEY"
+    end) = "plain:op://Vault/Item/plain/via:work.1password.com:op://Work/Item/field"
+
+@test "load --key: does not pass --account when key is in the secrets block" \
+    (begin
+        function _opah_get_config_paths; echo "$config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read
+                    if contains -- --account $argv
+                        set -l idx (contains -i -- --account $argv)
+                        set -l acct $argv[(math $idx + 1)]
+                        echo "via:$acct:$argv[-1]"
+                    else
+                        echo "plain:$argv[-1]"
+                    end
+                    return 0
+                case account
+                    printf '[{}]\n'; return 0
+            end
+            return 1
+        end
+        set -e OPAH_LOAD_KEY1
+        _opah_load --key=OPAH_LOAD_KEY1 >/dev/null 2>&1
+        echo $OPAH_LOAD_KEY1
+    end) = "plain:op://Vault/Item/field1"
+
+@test "load --key: passes --account when key is in an accounts block" \
+    (begin
+        function _opah_get_config_paths; echo "$accounts_config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read
+                    if contains -- --account $argv
+                        set -l idx (contains -i -- --account $argv)
+                        set -l acct $argv[(math $idx + 1)]
+                        echo "via:$acct:$argv[-1]"
+                    else
+                        echo "plain:$argv[-1]"
+                    end
+                    return 0
+                case account
+                    printf '[{"url":"work.1password.com"}]\n'; return 0
+            end
+            return 1
+        end
+        set -e WORK_KEY
+        _opah_load --key=WORK_KEY >/dev/null 2>&1
+        echo $WORK_KEY
+    end) = "via:work.1password.com:op://Work/Item/field"
+
+@test "load: fetches account-block secret with --account flag" \
+    (begin
+        function _opah_get_config_paths; echo "$accounts_config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read
+                    if contains -- --account $argv
+                        set -l idx (contains -i -- --account $argv)
+                        set -l acct $argv[(math $idx + 1)]
+                        echo "via:$acct:$argv[-1]"
+                    else
+                        echo "plain:$argv[-1]"
+                    end
+                    return 0
+                case account
+                    printf '[{"url":"work.1password.com"}]\n'; return 0
+            end
+            return 1
+        end
+        _opah_load --force >/dev/null 2>&1
+        echo $WORK_KEY
+    end) = "via:work.1password.com:op://Work/Item/field"
+
+# ── Load: per-account auth check ─────────────────────────────────────────────
+
+@test "load: error message names the missing sign-in address" \
+    (begin
+        function _opah_get_config_paths; echo "$accounts_config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read; echo "secret_value"; return 0
+                case account; printf '[{"url":"personal.1password.com"}]\n'; return 0
+            end
+            return 1
+        end
+        set -l err (_opah_load --force 2>&1 >/dev/null | string replace -ra '\e\[[0-9;]*m' '')
+        string match -q "*work.1password.com*" $err
+        and echo found; or echo not-found
+    end) = found
+
+@test "load: hint text uses op signin --account <address>" \
+    (begin
+        function _opah_get_config_paths; echo "$accounts_config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read; echo "secret_value"; return 0
+                case account; printf '[{"url":"personal.1password.com"}]\n'; return 0
+            end
+            return 1
+        end
+        set -l err (_opah_load --force 2>&1 >/dev/null | string replace -ra '\e\[[0-9;]*m' '')
+        string match -q "*op signin --account work.1password.com*" $err
+        and echo found; or echo not-found
+    end) = found
+
+@test "load: secrets-only config proceeds without per-account check" \
+    (begin
+        function _opah_get_config_paths; echo "$config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read; echo "secret_value"; return 0
+                case account
+                    # Only a different account — no work.1password.com
+                    printf '[{"url":"personal.1password.com"}]\n'; return 0
+            end
+            return 1
+        end
+        _opah_load --force >/dev/null 2>&1
+        echo $status
+    end) -eq 0
+
+@test "load --key: exits 1 when the key's account is not signed in" \
+    (begin
+        function _opah_get_config_paths; echo "$accounts_config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read; echo "secret_value"; return 0
+                case account; printf '[{"url":"personal.1password.com"}]\n'; return 0
+            end
+            return 1
+        end
+        _opah_load --key=WORK_KEY >/dev/null 2>&1
+        echo $status
+    end) -eq 1
+
+@test "load: exits 0 when account list JSON is pretty-printed (space after colon)" \
+    (begin
+        function _opah_get_config_paths; echo "$accounts_config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read; echo "secret_value"; return 0
+                case account
+                    printf '[{"url": "work.1password.com"}]\n'; return 0
+            end
+            return 1
+        end
+        _opah_load --force >/dev/null 2>&1
+        echo $status
+    end) -eq 0
+
+@test "load: exits 1 when a referenced account is not signed in" \
+    (begin
+        function _opah_get_config_paths; echo "$accounts_config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read
+                    echo "secret_value"; return 0
+                case account
+                    # Some other account is signed in, but not work.1password.com
+                    printf '[{"url":"personal.1password.com"}]\n'; return 0
+            end
+            return 1
+        end
+        _opah_load --force >/dev/null 2>&1
+        echo $status
+    end) -eq 1
+
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 rm -rf $tmp
