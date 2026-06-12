@@ -88,9 +88,27 @@ function _opah_load --description "Load secrets from 1Password CLI with data-bas
     end
 
     # Check if user is signed in to 1Password
-    if not op account list --format=json >/dev/null 2>&1
+    set -l account_list_json (op account list --format=json 2>/dev/null)
+    if test $status -ne 0
         _opah_error "Not signed in to 1Password" >&2
         _opah_hint "run: op signin to authenticate" >&2
+        return 1
+    end
+
+    # Per-account auth check: verify every referenced sign-in address is signed in
+    set -l auth_ok true
+    _opah_parse_yaml "$config_file" | while read -l line
+        set -l parts (string split \t "$line")
+        set -l account $parts[3]
+        if test -n "$account"
+            if not string match -q "*\"url\":\"$account\"*" "$account_list_json"
+                _opah_error "Not signed in to account '$account'" >&2
+                _opah_hint "run: op signin --account $account" >&2
+                set auth_ok false
+            end
+        end
+    end
+    if test "$auth_ok" = false
         return 1
     end
 
