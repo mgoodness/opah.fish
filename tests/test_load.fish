@@ -25,7 +25,6 @@ source (status dirname)/../functions/_opah_cache_keys.fish
 source (status dirname)/../functions/_opah_cache_count.fish
 source (status dirname)/../functions/_opah_parse_yaml.fish
 source (status dirname)/../functions/_opah_find_config.fish
-source (status dirname)/../functions/_opah_extract_accounts.fish
 source (status dirname)/../functions/_opah_load.fish
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -232,80 +231,6 @@ printf 'OPAH_CACHED_KEY\tcached_value\n' | _opah_cache_write "$cache_file" >/dev
         _opah_load >/dev/null 2>&1
         echo $OPAH_LOAD_KEY1
     end) = fresh_value
-
-# ── Load: per-account auth check ─────────────────────────────────────────────
-
-set config_qualified "$tmp/secrets_qualified.yaml"
-printf "secrets:\n  WORK_KEY: op://work/Vault/Item/field\n" >"$config_qualified"
-
-@test "load: exits 1 when account-qualified ref's account is not signed in" \
-    (begin
-        function _opah_get_config_paths; echo "$config_qualified"; end
-        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
-        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
-        function op
-            switch "$argv[1]"
-                case account
-                    printf '[{"url":"personal.1password.com","shorthand":"personal"}]\n'
-                    return 0
-                case read
-                    echo "secret_value"; return 0
-            end
-        end
-        rm -f "$tmp/cache/opah/secrets.fish"
-        _opah_load --force >/dev/null 2>&1
-        echo $status
-    end) -eq 1
-
-@test "load: error message names the missing account identifier" \
-    (begin
-        function _opah_get_config_paths; echo "$config_qualified"; end
-        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
-        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
-        function op
-            switch "$argv[1]"
-                case account; printf '[{"url":"personal.1password.com","shorthand":"personal"}]\n'; return 0
-                case read; echo "secret_value"; return 0
-            end
-        end
-        rm -f "$tmp/cache/opah/secrets.fish"
-        _opah_load --force 2>&1 >/dev/null | string match -q "*work*"
-        echo $status
-    end) -eq 0
-
-@test "load --key: exits 1 when account-qualified ref's account is not signed in" \
-    (begin
-        function _opah_get_config_paths; echo "$config_qualified"; end
-        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
-        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
-        function op
-            switch "$argv[1]"
-                case account; printf '[{"url":"personal.1password.com","shorthand":"personal"}]\n'; return 0
-                case read; echo "secret_value"; return 0
-            end
-        end
-        _opah_load --key=WORK_KEY >/dev/null 2>&1
-        echo $status
-    end) -eq 1
-
-@test "load: exits 0 when account-qualified ref's account is signed in" \
-    (begin
-        function _opah_get_config_paths; echo "$config_qualified"; end
-        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
-        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
-        function op
-            switch "$argv[1]"
-                case account
-                    printf '[{"url":"work.1password.com","shorthand":"work"}]\n'
-                    return 0
-                case read
-                    echo "secret_value"; return 0
-            end
-        end
-        rm -f "$tmp/cache/opah/secrets.fish"
-        _opah_load --force >/dev/null 2>&1
-        echo $status
-    end) -eq 0
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 rm -rf $tmp

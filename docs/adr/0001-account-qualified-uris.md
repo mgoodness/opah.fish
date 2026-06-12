@@ -1,3 +1,0 @@
-# Account identity embedded in secret references, not in config structure
-
-When supporting multiple 1Password accounts, the account is identified inside the `op://` URI itself — `op://account/vault/item/field` — rather than as a config-level field (e.g., an `account:` key per secrets block). This matches the 1Password CLI's own native 4-part URI format, keeps the config flat and self-describing, and requires no new YAML structure. Unqualified 3-part references continue to work unchanged for single-account setups. A config-level account field was considered but rejected: it would require opah to invent its own account-grouping schema on top of a format the CLI already defines.
