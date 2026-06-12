@@ -25,6 +25,9 @@ set f_colon_val (make_yaml cln  "secrets:\n  CONN: postgres://user:pass@host:543
 set f_two_sections (make_yaml two "secrets:\n  A: op://v/i/a\nother:\n  B: should_not_appear\n")
 set f_tabs_in_val (make_yaml tab  "secrets:\n  KEY: some\tvalue\n")
 set f_invalid_keys (make_yaml inv  "secrets:\n  valid_key: op://v/i/f\n  123invalid: op://v/i/f\n  has space: op://v/i/f\n")
+set f_accounts_single (make_yaml accsingle "accounts:\n  work.1password.com:\n    WORK_KEY: op://vault/item/field\n")
+set f_accounts_multi  (make_yaml accmulti  "accounts:\n  work.1password.com:\n    KEY1: op://vault/item/k1\n    KEY2: op://vault/item/k2\n")
+set f_mixed           (make_yaml mixed     "secrets:\n  PLAIN_KEY: op://vault/item/plain\naccounts:\n  work.1password.com:\n    WORK_KEY: op://vault/item/work\n")
 
 # ── Exit status ───────────────────────────────────────────────────────────────
 
@@ -42,8 +45,8 @@ set f_invalid_keys (make_yaml inv  "secrets:\n  valid_key: op://v/i/f\n  123inva
 
 # ── Output format ─────────────────────────────────────────────────────────────
 
-@test "parse_yaml: outputs KEY<tab>VALUE on one line" \
-    (_opah_parse_yaml $f_basic) = (printf 'API_KEY\top://vault/item/field')
+@test "parse_yaml: outputs KEY<tab>VALUE<tab>ACCOUNT on one line" \
+    (_opah_parse_yaml $f_basic) = (printf 'API_KEY\top://vault/item/field\t')
 
 @test "parse_yaml: outputs one line per secret" \
     (_opah_parse_yaml $f_multi | count) -eq 3
@@ -63,7 +66,7 @@ set f_invalid_keys (make_yaml inv  "secrets:\n  valid_key: op://v/i/f\n  123inva
     (_opah_parse_yaml $f_quoted_sq | string split \t)[2] = "op://vault/item/field"
 
 @test "parse_yaml: preserves colons in value" \
-    (_opah_parse_yaml $f_colon_val | string split -m 1 \t)[2] = "postgres://user:pass@host:5432/db"
+    (_opah_parse_yaml $f_colon_val | string split \t)[2] = "postgres://user:pass@host:5432/db"
 
 # ── Comments and blank lines ──────────────────────────────────────────────────
 
@@ -87,7 +90,33 @@ set f_invalid_keys (make_yaml inv  "secrets:\n  valid_key: op://v/i/f\n  123inva
     (_opah_parse_yaml $f_invalid_keys | count) -eq 1
 
 @test "parse_yaml: skips key starting with digit" \
-    (_opah_parse_yaml $f_invalid_keys) = (printf 'valid_key\top://v/i/f')
+    (_opah_parse_yaml $f_invalid_keys) = (printf 'valid_key\top://v/i/f\t')
+
+# ── Accounts block ───────────────────────────────────────────────────────────
+
+@test "parse_yaml: exits 0 when only accounts section found" \
+    (_opah_parse_yaml $f_accounts_single >/dev/null 2>&1; echo $status) -eq 0
+
+@test "parse_yaml: outputs sign-in address in third field for accounts entry" \
+    (_opah_parse_yaml $f_accounts_single | string split \t)[3] = "work.1password.com"
+
+@test "parse_yaml: outputs one line per secret in accounts block" \
+    (_opah_parse_yaml $f_accounts_multi | count) -eq 2
+
+@test "parse_yaml: both secrets and accounts blocks emit correct line count" \
+    (_opah_parse_yaml $f_mixed | count) -eq 2
+
+@test "parse_yaml: accounts entry has correct key" \
+    (_opah_parse_yaml $f_accounts_single | string split \t)[1] = WORK_KEY
+
+@test "parse_yaml: accounts entry has correct value" \
+    (_opah_parse_yaml $f_accounts_single | string split \t)[2] = "op://vault/item/field"
+
+@test "parse_yaml: secrets entry in mixed file has empty account field" \
+    (_opah_parse_yaml $f_mixed | head -n 1 | string split \t)[3] = ""
+
+@test "parse_yaml: accounts entry in mixed file has account field" \
+    (_opah_parse_yaml $f_mixed | tail -n 1 | string split \t)[3] = "work.1password.com"
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 rm -rf $tmp

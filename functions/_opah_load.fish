@@ -109,9 +109,10 @@ function _opah_load --description "Load secrets from 1Password CLI with data-bas
 
         # Find the op:// reference for this key in the config
         set -l op_ref ""
-        _opah_parse_yaml "$config_file" | while read -l key value
-            if test "$key" = "$specific_key"
-                set op_ref "$value"
+        _opah_parse_yaml "$config_file" | while read -l line
+            set -l parts (string split \t "$line")
+            if test "$parts[1]" = "$specific_key"
+                set op_ref $parts[2]
             end
         end
 
@@ -150,10 +151,11 @@ function _opah_load --description "Load secrets from 1Password CLI with data-bas
     set -l all_keys
     set -l all_refs
     set -l col_width 10
-    _opah_parse_yaml "$config_file" | while read -l key op_ref
-        set -a all_keys $key
-        set -a all_refs $op_ref
-        set -l w (math (string length "$key") + 5)
+    _opah_parse_yaml "$config_file" | while read -l line
+        set -l parts (string split \t "$line")
+        set -a all_keys $parts[1]
+        set -a all_refs $parts[2]
+        set -l w (math (string length "$parts[1]") + 5)
         if test $w -gt $col_width
             set col_width $w
         end
