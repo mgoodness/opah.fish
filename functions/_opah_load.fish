@@ -101,7 +101,7 @@ function _opah_load --description "Load secrets from 1Password CLI with data-bas
         set -l parts (string split \t "$line")
         set -l account $parts[3]
         if test -n "$account"
-            if not string match -q "*\"url\":\"$account\"*" "$account_list_json"
+            if not string match -qr "\"url\":[[:space:]]*\"$account\"" "$account_list_json"
                 _opah_error "Not signed in to account '$account'" >&2
                 _opah_hint "run: op signin --account $account" >&2
                 set auth_ok false

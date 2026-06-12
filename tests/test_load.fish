@@ -447,6 +447,24 @@ printf "secrets:\n  PLAIN_KEY: op://Vault/Item/plain\naccounts:\n  work.1passwor
         echo $status
     end) -eq 1
 
+@test "load: exits 0 when account list JSON is pretty-printed (space after colon)" \
+    (begin
+        function _opah_get_config_paths; echo "$accounts_config_file"; end
+        function _opah_get_cache_dir; echo "$tmp/cache/opah"; end
+        function _opah_get_cache_file; echo "$tmp/cache/opah/secrets.fish"; end
+        rm -f "$tmp/cache/opah/secrets.fish"
+        function op
+            switch $argv[1]
+                case read; echo "secret_value"; return 0
+                case account
+                    printf '[{"url": "work.1password.com"}]\n'; return 0
+            end
+            return 1
+        end
+        _opah_load --force >/dev/null 2>&1
+        echo $status
+    end) -eq 0
+
 @test "load: exits 1 when a referenced account is not signed in" \
     (begin
         function _opah_get_config_paths; echo "$accounts_config_file"; end

@@ -117,5 +117,19 @@ end
         and echo found; or echo not-found
     end) = not-found
 
+@test "doctor: signed-in account with pretty-printed JSON (space after colon) shows success row" \
+    (begin
+        set -l out (run_doctor "$accounts_config" '[{"url": "work.1password.com"}]')
+        string match -q "* ● *work.1password.com*" $out
+        and echo found; or echo not-found
+    end) = found
+
+@test "doctor: accounts-only config with all op:// values shows no non-op warning" \
+    (begin
+        set -l out (run_doctor "$accounts_config" '[{"url":"work.1password.com"}]')
+        string match -q "*value(s) are not 1Password references*" $out
+        and echo found; or echo not-found
+    end) = not-found
+
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 rm -rf $tmp
